@@ -6,7 +6,7 @@
 
 ## Overview
 
-CourtCode is a native desktop application for basketball video analysis. It provides the core workflows of Sportscode — video import, frame-accurate tagging, playlist building, statistical analysis, and scouting reports — in a modern, open-source Rust architecture.
+ATH-TAG is a native desktop application for basketball video analysis. It provides the core workflows of Sportscode — video import, frame-accurate tagging, playlist building, statistical analysis, and scouting reports — in a modern, open-source Rust architecture.
 
 ### Tech Stack
 
