@@ -78,6 +78,7 @@
   .coding-layout { display: flex; flex: 1; overflow: hidden; }
   .video-section { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .video-player-wrap { background: #000; aspect-ratio: 16/9; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #main-video { width: 100%; height: 100%; object-fit: contain; display: none; }
   .video-player-wrap .no-video { color: var(--text3); text-align: center; }
   .video-player-wrap .no-video i { font-size: 48px; display: block; margin-bottom: 8px; }
   .timeline-bar { height: 40px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; gap: 8px; flex-shrink: 0; }
@@ -252,7 +253,8 @@
         <div class="coding-layout">
           <div class="video-section">
             <div class="video-player-wrap" id="player-wrap">
-              <div class="no-video">
+              <video id="main-video" preload="metadata"></video>
+              <div class="no-video" id="no-video-msg">
                 <i class="ti ti-device-tv"></i>
                 <div>Select a video from the library to start coding</div>
               </div>
@@ -404,8 +406,15 @@ const CAT_COLORS = {
 function catColor(cat) { return CAT_COLORS[cat] || '#6b7280'; }
 
 async function invoke(cmd, args = {}) {
-    if (isTauri) return window.__TAURI__.core.invoke(cmd, args);
-    return demoInvoke(cmd, args);
+  if (isTauri) {
+    try {
+      return await window.__TAURI__.core.invoke(cmd, args);
+    } catch (e) {
+      console.error(`[invoke] ${cmd} failed:`, e);
+      throw e;
+    }
+  }
+  return demoInvoke(cmd, args);
 }
 
 // Demo data for browser preview
@@ -591,14 +600,26 @@ function fmtTime(secs) {
 
 // ── Coding View ────────────────────────────────────────────
 function renderCodingView() {
-  const wrap = document.getElementById('player-wrap');
   if (!state.selectedVideo) return;
-  wrap.innerHTML = `<div style="color:var(--text2);text-align:center">
-    <i class="ti ti-device-tv" style="font-size:64px;display:block;margin-bottom:8px;color:var(--text3)"></i>
-    <div style="font-size:14px;font-weight:600">${state.selectedVideo.title}</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:4px">${state.selectedVideo.home_team || ''} ${state.selectedVideo.home_team && state.selectedVideo.away_team ? 'vs' : ''} ${state.selectedVideo.away_team || ''}</div>
-    <div style="margin-top:12px;font-size:11px;color:var(--text3)">Video playback available in native Tauri app</div>
-  </div>`;
+  const video = document.getElementById('main-video');
+  const noMsg = document.getElementById('no-video-msg');
+  if (isTauri) {
+    const src = window.__TAURI__.core.convertFileSrc(state.selectedVideo.file_path);
+    if (video.src !== src) {
+      video.src = src;
+      state.duration = 600;
+    }
+    video.style.display = 'block';
+    noMsg.style.display = 'none';
+  } else {
+    video.style.display = 'none';
+    noMsg.style.display = 'flex';
+    noMsg.innerHTML = `
+      <i class="ti ti-device-tv" style="font-size:48px;display:block;margin-bottom:8px;color:var(--text3)"></i>
+      <div style="font-size:14px;font-weight:600;color:var(--text2)">${state.selectedVideo.title}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Demo mode · video playback available in native app</div>
+    `;
+  }
   updateScrub();
 }
 
@@ -630,11 +651,15 @@ async function tagNow(btnId, label, category, color) {
     quarter, player_ids: null, notes: null,
     court_zone: null, shot_result: null, possession: null,
   };
-  const tag = await invoke('create_tag', { req });
-  state.tags.push(tag);
-  renderTagTimeline();
-  renderTagsList();
-  notify(`Tagged: ${label} @ ${fmtTime(state.currentTime)}`);
+  try {
+    const tag = await invoke('create_tag', { req });
+    state.tags.push(tag);
+    renderTagTimeline();
+    renderTagsList();
+    notify(`Tagged: ${label} @ ${fmtTime(state.currentTime)}`);
+  } catch (e) {
+    notify(`Tag failed: ${e}`, false);
+  }
 }
 
 function renderTagTimeline() {
@@ -681,8 +706,13 @@ async function deleteTag(id) {
   notify('Tag deleted');
 }
 
-// ── Simulated playback ────────────────────────────────────
+// ── Playback helpers ───────────────────────────────────────
 function seekTo(t) {
+  const video = document.getElementById('main-video');
+  if (isTauri && video.src) {
+    video.currentTime = t;
+    return;
+  }
   state.currentTime = t;
   updateScrub();
 }
@@ -697,7 +727,30 @@ function updateScrub() {
   if (disp) disp.textContent = `${fmtTime(state.currentTime)} / ${fmtTime(state.duration)}`;
 }
 
+// Wire real video events once at startup
+(function () {
+  const video = document.getElementById('main-video');
+  const icon  = document.getElementById('play-icon');
+  video.addEventListener('loadedmetadata', () => {
+    state.duration = video.duration;
+    updateScrub();
+  });
+  video.addEventListener('timeupdate', () => {
+    state.currentTime = video.currentTime;
+    updateScrub();
+  });
+  video.addEventListener('play',  () => { state.playing = true;  icon.className = 'ti ti-player-pause'; });
+  video.addEventListener('pause', () => { state.playing = false; icon.className = 'ti ti-player-play'; });
+  video.addEventListener('ended', () => { state.playing = false; icon.className = 'ti ti-player-play'; });
+})();
+
 document.getElementById('play-btn').addEventListener('click', () => {
+  const video = document.getElementById('main-video');
+  if (isTauri && video.src) {
+    video.paused ? video.play() : video.pause();
+    return;
+  }
+  // Demo fallback
   state.playing = !state.playing;
   const icon = document.getElementById('play-icon');
   icon.className = state.playing ? 'ti ti-player-pause' : 'ti ti-player-play';
@@ -718,8 +771,10 @@ document.getElementById('play-btn').addEventListener('click', () => {
 
 document.getElementById('scrub').addEventListener('click', (e) => {
   const rect = e.currentTarget.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  state.currentTime = pct * state.duration;
+  const t = (e.clientX - rect.left) / rect.width * state.duration;
+  const video = document.getElementById('main-video');
+  if (isTauri && video.src) { video.currentTime = t; return; }
+  state.currentTime = t;
   updateScrub();
 });
 
@@ -799,7 +854,8 @@ async function sharePlaylist(id) {
 
 // ── Stats ──────────────────────────────────────────────────
 async function renderStats() {
-  const stats = await invoke('global_stats', {});
+  let stats;
+  try { stats = await invoke('global_stats', {}); } catch (e) { console.error('Stats failed:', e); return; }
   const grid = document.getElementById('stats-grid');
   const avgDur = stats.average_clip_duration.toFixed(1);
   const videos = state.videos.length;
@@ -863,7 +919,8 @@ async function renderStats() {
 
 // ── Scouting ───────────────────────────────────────────────
 async function renderScouting() {
-  const stats = await invoke('global_stats', {});
+  let stats;
+  try { stats = await invoke('global_stats', {}); } catch (e) { console.error('Scouting failed:', e); return; }
   const catEntries = Object.entries(stats.tags_by_category);
   const el = document.getElementById('scouting-content');
   const video = state.selectedVideo;
@@ -923,10 +980,15 @@ async function doImport() {
     away_team: document.getElementById('imp-away').value.trim() || null,
     venue: document.getElementById('imp-venue').value.trim() || null,
   };
-  const video = await invoke('import_video', { req });
-  hideImportModal();
-  renderLibrary();
-  notify(`Imported: ${video.title}`);
+  try {
+    const video = await invoke('import_video', { req });
+    state.videos.push(video);
+    hideImportModal();
+    renderLibrary();
+    notify(`Imported: ${video.title}`);
+  } catch (e) {
+    notify(`Import failed: ${e}`, false);
+  }
 }
 
 // ── Notifications ──────────────────────────────────────────
@@ -935,14 +997,25 @@ function notify(msg, success = true) {
   const msgEl = document.getElementById('notif-msg');
   msgEl.textContent = msg;
   el.className = 'notif show' + (success ? ' success' : '');
-  setTimeout(() => el.className = 'notif', 3000);
+  setTimeout(() => el.className = 'notif', 4000);
 }
 
-// ── Demo seed data ─────────────────────────────────────────
+window.addEventListener('unhandledrejection', e => {
+  const msg = e.reason?.message || String(e.reason);
+  console.error('Unhandled rejection:', e.reason);
+  notify('Error: ' + msg, false);
+});
+
+if (isTauri) {
+  document.addEventListener('keydown', e => {
+    if (e.key === 'F12') window.__TAURI__.core.invoke('plugin:webview|toggle_devtools').catch(() => {});
+  });
+}
+
+// ── Demo seed data (browser-only) ─────────────────────────
 async function seedDemo() {
   state.codeWindow = await invoke('default_code_window', {});
 
-  // Seed 3 demo videos
   const games = [
     { file_path: '/videos/celtics_vs_lakers.mp4', title: 'Celtics vs Lakers — Game 1', game_date: '2024-11-15', home_team: 'Celtics', away_team: 'Lakers', venue: 'TD Garden' },
     { file_path: '/videos/celtics_vs_warriors.mp4', title: 'Celtics vs Warriors — Regular', game_date: '2024-11-22', home_team: 'Warriors', away_team: 'Celtics', venue: 'Chase Center' },
@@ -950,7 +1023,6 @@ async function seedDemo() {
   ];
   for (const g of games) {
     const v = await invoke('import_video', { req: g });
-    // Seed tags for first video
     if (g.title.includes('Lakers')) {
       const tagDefs = [
         ['Pick & Roll','Offense',45,52,1],['Man Defense','Defense',53,58,1],['Isolation','Offense',120,130,1],
@@ -965,13 +1037,40 @@ async function seedDemo() {
       }
     }
   }
-  renderLibrary();
-  renderCodeButtons();
-  renderTagsList();
+}
+
+// ── Tauri native init: load real data from DB ──────────────
+async function initFromDb() {
+  try {
+    state.codeWindow = await invoke('default_code_window', {});
+    const saved = await invoke('list_code_windows', {});
+    if (saved.length > 0) state.codeWindow = saved[0];
+  } catch (e) {
+    console.error('Code window load failed:', e);
+    state.codeWindow = demoCodeWindow(); // always show buttons even if backend is unreachable
+  }
+
+  try { state.videos = await invoke('list_videos', {}); } catch (e) { console.error('Video load failed:', e); }
+
+  try {
+    const arrays = await Promise.all(state.videos.map(v => invoke('tags_for_video', { video_id: v.id })));
+    state.tags = arrays.flat();
+  } catch (e) { console.error('Tag load failed:', e); }
+
+  try { state.playlists = await invoke('list_playlists', {}); } catch (e) { console.error('Playlist load failed:', e); }
 }
 
 // ── Init ───────────────────────────────────────────────────
-seedDemo();
+(async () => {
+  if (isTauri) {
+    await initFromDb();
+  } else {
+    await seedDemo();
+  }
+  renderLibrary();
+  renderCodeButtons();
+  renderTagsList();
+})();
 </script>
 </body>
 </html>
