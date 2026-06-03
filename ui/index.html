@@ -403,11 +403,9 @@ const CAT_COLORS = {
 };
 function catColor(cat) { return CAT_COLORS[cat] || '#6b7280'; }
 
-// ── Tauri IPC (with demo fallback) ────────────────────────
-const isTauri = typeof window.__TAURI__ !== 'undefined';
 async function invoke(cmd, args = {}) {
-  if (isTauri) return window.__TAURI__.tauri.invoke(cmd, args);
-  return demoInvoke(cmd, args);
+    if (isTauri) return window.__TAURI__.core.invoke(cmd, args);
+    return demoInvoke(cmd, args);
 }
 
 // Demo data for browser preview

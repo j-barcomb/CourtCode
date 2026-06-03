@@ -1,0 +1,29 @@
+{
+  "productName": "CourtCode",
+  "version": "0.1.0",
+  "identifier": "com.courtcode.app",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "CourtCode",
+        "width": 1600,
+        "height": 900,
+        "minWidth": 1200,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.ico"]
+  }
+}

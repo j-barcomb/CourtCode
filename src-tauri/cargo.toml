@@ -1,0 +1,23 @@
+[package]
+name = "courtcode"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "courtcode"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "=1.6.1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1"
+anyhow = "1"
+dirs = "5"
+courtcode_lib = { path = "..", package = "courtcode-core" }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
