@@ -270,6 +270,14 @@
               <select id="quarter-sel" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:4px;font-size:12px;">
                 <option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option><option value="5">OT</option>
               </select>
+              <span style="font-size:11px;color:var(--text3);">Speed:</span>
+              <select id="speed-sel" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:3px 6px;border-radius:4px;font-size:12px;">
+                <option value="0.25">0.25×</option>
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
             </div>
             <div class="tag-timeline">
               <div class="tag-lane" id="tag-lane"></div>
@@ -340,8 +348,11 @@
   <div class="modal">
     <h2><i class="ti ti-file-import" style="color:var(--accent)"></i> Import Video</h2>
     <div class="form-row">
-      <label>Video File Path</label>
-      <input type="text" id="imp-path" placeholder="/path/to/game.mp4" />
+      <label>Video File</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="imp-path" placeholder="Click Browse or paste a path…" style="flex:1" />
+        <button class="btn-secondary" onclick="browseVideoFile()" style="white-space:nowrap">Browse…</button>
+      </div>
     </div>
     <div class="form-row">
       <label>Title</label>
@@ -391,6 +402,7 @@ const state = {
   playing: false,
   playInterval: null,
   selectedPlaylist: null,
+  thumbnails: {},   // videoId → jpeg data URL
 };
 
 // ── Category colors ────────────────────────────────────────
@@ -445,7 +457,7 @@ async function demoInvoke(cmd, args) {
     state.tags.push(t);
     return t;
   }
-  if (cmd === 'tags_for_video') return state.tags.filter(t => t.video_id === args.video_id);
+  if (cmd === 'tags_for_video') return state.tags.filter(t => t.video_id === (args.videoId ?? args.video_id));
   if (cmd === 'filter_tags') return filterTagsLocal(args.filter);
   if (cmd === 'delete_tag') { state.tags = state.tags.filter(t => t.id !== args.id); return 1; }
   if (cmd === 'create_playlist') {
@@ -460,7 +472,7 @@ async function demoInvoke(cmd, args) {
   if (cmd === 'list_playlists') return state.playlists;
   if (cmd === 'delete_playlist') { state.playlists = state.playlists.filter(p => p.id !== args.id); return 1; }
   if (cmd === 'share_playlist') return `courtcode://share/${args.id}/${uid()}`;
-  if (cmd === 'video_stats') return computeStats(args.video_id);
+  if (cmd === 'video_stats') return computeStats(args.videoId ?? args.video_id);
   if (cmd === 'global_stats') return computeStats('all');
   if (cmd === 'list_players') return state.players;
   return null;
@@ -538,6 +550,63 @@ document.querySelectorAll('.nav-btn[data-panel]').forEach(btn => {
 });
 
 // ── Library ────────────────────────────────────────────────
+function videoMime(path) {
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  return { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', wmv: 'video/x-ms-wmv' }[ext] || 'video/mp4';
+}
+
+async function generateThumbnail(videoFile) {
+  if (!isTauri) return null;
+  if (state.thumbnails[videoFile.id]) return state.thumbnails[videoFile.id];
+
+  // Fetch the first 3 MB via the asset protocol and wrap in a blob:// URL.
+  // blob:// is always same-origin with the document so canvas.toDataURL() won't throw.
+  let blobUrl;
+  try {
+    const assetUrl = window.__TAURI__.core.convertFileSrc(videoFile.file_path);
+    const res = await fetch(assetUrl, { headers: { Range: 'bytes=0-3145727' } });
+    if (!res.ok && res.status !== 206) throw new Error('HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    blobUrl = URL.createObjectURL(new Blob([buf.byteLength > 3145728 ? buf.slice(0, 3145728) : buf], { type: videoMime(videoFile.file_path) }));
+  } catch (e) {
+    console.warn('[thumb] fetch failed for', videoFile.title, '—', e.message);
+    return null;
+  }
+
+  return new Promise(resolve => {
+    const vid = document.createElement('video');
+    vid.muted = true;
+    vid.preload = 'auto';
+    vid.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:320px;height:180px;opacity:0;pointer-events:none;';
+    document.body.appendChild(vid);
+
+    const cleanup = () => { try { URL.revokeObjectURL(blobUrl); vid.src = ''; vid.remove(); } catch {} };
+    const done = url => { if (url) state.thumbnails[videoFile.id] = url; cleanup(); resolve(url); };
+
+    const capture = () => {
+      try {
+        const W = 320, H = vid.videoHeight > 0 ? Math.round(W * vid.videoHeight / vid.videoWidth) : 180;
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        c.getContext('2d').drawImage(vid, 0, 0, W, H);
+        done(c.toDataURL('image/jpeg', 0.7));
+      } catch (e) {
+        console.error('[thumb] canvas error for', videoFile.title, ':', e.message);
+        done(null);
+      }
+    };
+
+    vid.addEventListener('loadedmetadata', () => {
+      const t = isFinite(vid.duration) && vid.duration > 2 ? Math.min(5, vid.duration * 0.1) : 0;
+      if (t > 0) { vid.currentTime = t; } else { capture(); }
+    }, { once: true });
+    vid.addEventListener('seeked', capture, { once: true });
+    vid.addEventListener('error', () => { console.warn('[thumb] video error for', videoFile.title); done(null); }, { once: true });
+
+    vid.src = blobUrl;
+  });
+}
+
 function renderLibrary() {
   const grid = document.getElementById('library-grid');
   document.getElementById('db-count').textContent = `${state.videos.length} video${state.videos.length !== 1 ? 's' : ''}`;
@@ -555,9 +624,11 @@ function renderLibrary() {
     const tagCount = state.tags.filter(t => t.video_id === v.id).length;
     const teams = v.home_team && v.away_team ? `${v.home_team} vs ${v.away_team}` : '';
     const isSelected = state.selectedVideo?.id === v.id;
+    const thumb = state.thumbnails[v.id];
+    const thumbStyle = thumb ? `background-image:url('${thumb}');background-size:cover;background-position:center;` : '';
     return `<div class="video-card ${isSelected ? 'selected' : ''}" onclick="selectVideo('${v.id}')">
-      <div class="video-thumb">
-        <i class="ti ti-video"></i>
+      <div class="video-thumb" id="vthumb-${v.id}" style="${thumbStyle}">
+        ${thumb ? '' : '<i class="ti ti-video"></i>'}
         ${teams ? `<span class="teams">${teams}</span>` : ''}
         <span class="duration-badge">${dur}</span>
       </div>
@@ -571,14 +642,31 @@ function renderLibrary() {
       </div>
     </div>`;
   }).join('');
+
+  // Generate thumbnails in the background for any card that doesn't have one yet
+  if (isTauri) {
+    state.videos
+      .filter(v => !state.thumbnails[v.id])
+      .forEach(v => generateThumbnail(v).then(url => {
+        if (!url) return;
+        const el = document.getElementById(`vthumb-${v.id}`);
+        if (!el) return;
+        el.style.backgroundImage = `url('${url}')`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        const icon = el.querySelector('i');
+        if (icon) icon.remove();
+      }));
+  }
 }
 
 async function selectVideo(id) {
   state.selectedVideo = state.videos.find(v => v.id === id);
   state.duration = state.selectedVideo?.duration_seconds || 600;
   state.currentTime = 0;
-  state.tags = await invoke('tags_for_video', { video_id: id });
+  state.tags = await invoke('tags_for_video', { videoId: id });
   renderLibrary();
+  showPanel('coding');
   renderCodingView();
   renderTagTimeline();
   renderTagsList();
@@ -605,10 +693,10 @@ function renderCodingView() {
   const noMsg = document.getElementById('no-video-msg');
   if (isTauri) {
     const src = window.__TAURI__.core.convertFileSrc(state.selectedVideo.file_path);
-    if (video.src !== src) {
-      video.src = src;
-      state.duration = 600;
-    }
+    console.log('[CourtCode] video src →', src);
+    video.src = src;
+    video.load();
+    state.duration = 600;
     video.style.display = 'block';
     noMsg.style.display = 'none';
   } else {
@@ -733,6 +821,16 @@ function updateScrub() {
   const icon  = document.getElementById('play-icon');
   video.addEventListener('loadedmetadata', () => {
     state.duration = video.duration;
+    if (state.selectedVideo) {
+      state.selectedVideo.duration_seconds = video.duration;
+      const entry = state.videos.find(v => v.id === state.selectedVideo.id);
+      if (entry) {
+        entry.duration_seconds = video.duration;
+        // Patch just the duration badge — avoid full renderLibrary() which triggers async thumbnail work
+        const badge = document.querySelector(`#vthumb-${entry.id} .duration-badge`);
+        if (badge) badge.textContent = fmtDur(video.duration);
+      }
+    }
     updateScrub();
   });
   video.addEventListener('timeupdate', () => {
@@ -742,6 +840,12 @@ function updateScrub() {
   video.addEventListener('play',  () => { state.playing = true;  icon.className = 'ti ti-player-pause'; });
   video.addEventListener('pause', () => { state.playing = false; icon.className = 'ti ti-player-play'; });
   video.addEventListener('ended', () => { state.playing = false; icon.className = 'ti ti-player-play'; });
+  video.addEventListener('error', () => {
+    const e = video.error;
+    const msg = e ? `MediaError code ${e.code}: ${e.message}` : 'unknown error';
+    console.error('[video]', msg, 'src=', video.src);
+    notify('Video load error: ' + msg, false);
+  });
 })();
 
 document.getElementById('play-btn').addEventListener('click', () => {
@@ -776,6 +880,12 @@ document.getElementById('scrub').addEventListener('click', (e) => {
   if (isTauri && video.src) { video.currentTime = t; return; }
   state.currentTime = t;
   updateScrub();
+});
+
+document.getElementById('speed-sel').addEventListener('change', (e) => {
+  const rate = parseFloat(e.target.value);
+  const video = document.getElementById('main-video');
+  if (video) video.playbackRate = rate;
 });
 
 // ── Playlists ──────────────────────────────────────────────
@@ -966,8 +1076,36 @@ async function renderScouting() {
 }
 
 // ── Import Modal ───────────────────────────────────────────
-function showImportModal() { document.getElementById('import-modal').style.display = 'flex'; }
+function showImportModal() {
+  document.getElementById('imp-path').value = '';
+  document.getElementById('imp-title').value = '';
+  document.getElementById('imp-home').value = '';
+  document.getElementById('imp-away').value = '';
+  document.getElementById('imp-date').value = '';
+  document.getElementById('imp-venue').value = '';
+  document.getElementById('import-modal').style.display = 'flex';
+}
 function hideImportModal() { document.getElementById('import-modal').style.display = 'none'; }
+
+async function browseVideoFile() {
+  if (!isTauri) { notify('File picker only available in the native app', false); return; }
+  try {
+    const selected = await window.__TAURI__.dialog.open({
+      multiple: false,
+      filters: [{ name: 'Video', extensions: ['mp4','mov','avi','mkv','wmv','m4v','webm'] }],
+    });
+    if (!selected) return;
+    const path = typeof selected === 'string' ? selected : selected.path ?? selected;
+    document.getElementById('imp-path').value = path;
+    if (!document.getElementById('imp-title').value) {
+      const name = path.replace(/\\/g, '/').split('/').pop().replace(/\.[^.]+$/, '');
+      document.getElementById('imp-title').value = name;
+    }
+  } catch (e) {
+    console.error('File picker failed:', e);
+    notify('File picker error: ' + e, false);
+  }
+}
 
 async function doImport() {
   const path = document.getElementById('imp-path').value.trim();
@@ -984,8 +1122,8 @@ async function doImport() {
     const video = await invoke('import_video', { req });
     state.videos.push(video);
     hideImportModal();
-    renderLibrary();
     notify(`Imported: ${video.title}`);
+    await selectVideo(video.id);
   } catch (e) {
     notify(`Import failed: ${e}`, false);
   }
@@ -1053,7 +1191,7 @@ async function initFromDb() {
   try { state.videos = await invoke('list_videos', {}); } catch (e) { console.error('Video load failed:', e); }
 
   try {
-    const arrays = await Promise.all(state.videos.map(v => invoke('tags_for_video', { video_id: v.id })));
+    const arrays = await Promise.all(state.videos.map(v => invoke('tags_for_video', { videoId: v.id })));
     state.tags = arrays.flat();
   } catch (e) { console.error('Tag load failed:', e); }
 

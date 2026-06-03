@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 // Re-use all the logic from the library
 use courtcode_lib::{
@@ -110,6 +110,27 @@ fn main() {
         .unwrap_or_else(|_| Database::in_memory().expect("DB failed"));
 
     tauri::Builder::default()
+        .setup(|app| {
+            // Open the asset:// protocol scope so it can serve video files from anywhere
+            let scope = app.asset_protocol_scope();
+            // Allow the user's home directory
+            if let Some(home) = dirs::home_dir() {
+                scope.allow_directory(&home, true).ok();
+            }
+            // On Windows, allow the root of every drive letter that exists
+            #[cfg(windows)]
+            for letter in b'A'..=b'Z' {
+                let root = std::path::PathBuf::from(format!("{}:\\", letter as char));
+                if root.exists() {
+                    scope.allow_directory(&root, true).ok();
+                }
+            }
+            // On macOS / Linux allow filesystem root
+            #[cfg(not(windows))]
+            scope.allow_directory("/", true).ok();
+            Ok(())
+        })
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(db))
         .invoke_handler(tauri::generate_handler![
             import_video, list_videos, delete_video,
