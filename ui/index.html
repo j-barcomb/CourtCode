@@ -98,7 +98,23 @@
   .tag-chip:hover { opacity: 1; }
 
   /* Code window sidebar */
-  .code-panel { width: 260px; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+  .code-panel { width: 260px; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; position: relative; }
+  .resize-handle { width: 4px; background: var(--border); cursor: col-resize; transition: background 0.15s; user-select: none; }
+  .resize-handle:hover { background: var(--accent); }
+  .coding-layout.stacked { flex-direction: column; }
+  .coding-layout.stacked .video-section { flex: 0 0 60%; min-height: 0; }
+  .coding-layout.stacked .code-panel { width: 100%; display: flex; flex-direction: column; border-left: none; border-top: 1px solid var(--border); overflow-y: visible; position: relative; }
+  .coding-layout.stacked .code-panel .code-section { flex: 0 0 200px; border-bottom: 1px solid var(--border); overflow-y: auto; }
+  .coding-layout.stacked .code-panel .tags-section { flex: 1; min-height: 100px; overflow-y: auto; }
+  #tags-resize-handle {
+    display: flex !important;
+    width: 100%;
+    height: 4px;
+    cursor: row-resize;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  #tags-resize-handle:hover { background: var(--accent); }
   .code-panel-head { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); }
   .code-panel-head h3 { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
   .code-section { padding: 8px; }
@@ -173,6 +189,15 @@
   .scout-item-val { font-size: 13px; font-weight: 700; color: var(--accent); }
   .court-diagram { width: 100%; aspect-ratio: 1.5; background: #1a3a1a; border-radius: var(--radius); position: relative; overflow: hidden; }
 
+  /* ── PLAYERS ── */
+  #panel-players { flex-direction: column; }
+  .player-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; transition: all .15s; }
+  .player-card:hover { border-color: var(--accent); }
+  .player-info h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+  .player-info .meta { font-size: 11px; color: var(--text2); }
+  .player-delete { width: 28px; height: 28px; background: rgba(239, 68, 68, 0.9); border: none; color: #fff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .player-delete:hover { background: rgba(239, 68, 68, 1); }
+
   /* Empty states */
   .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text3); }
   .empty-state i { font-size: 48px; }
@@ -234,6 +259,7 @@
       <div class="topbar-sep"></div>
       <span id="topbar-context" class="topbar-tag" style="background:rgba(59,130,246,0.15);color:var(--accent)">Video Library</span>
       <div class="topbar-spacer"></div>
+      <button class="topbar-btn" id="layout-toggle-btn-topbar" title="Toggle layout" style="display:none;"><i class="ti ti-layout-sidebar-right-collapse"></i></button>
       <button class="topbar-btn" onclick="showImportModal()"><i class="ti ti-file-import"></i> Import Video</button>
       <button class="topbar-btn" onclick="createPlaylistFromFilter()"><i class="ti ti-plus"></i> New Playlist</button>
       <button class="topbar-btn" onclick="showPanel('stats')"><i class="ti ti-chart-pie"></i> Stats</button>
@@ -287,18 +313,38 @@
             </div>
           </div>
 
+          <!-- Resize handle -->
+          <div class="resize-handle" id="code-panel-resize-handle"></div>
+
           <!-- Code window + tags -->
-          <div class="code-panel">
+          <div class="code-panel" id="code-panel">
             <div class="code-panel-head">
               <h3>Code Window</h3>
             </div>
             <div class="code-section" id="code-buttons">
               <!-- populated by JS -->
             </div>
+            <div class="resize-handle" id="tags-resize-handle"></div>
             <div class="tags-section">
               <div class="tags-section-head">
                 <span>Tagged Events</span>
                 <span id="tag-count-badge" style="font-size:11px;color:var(--accent);font-weight:700">0</span>
+              </div>
+              <div style="padding:8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px">
+                <input type="text" id="tag-search-input" placeholder="Search..." style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-size:11px;outline:none" onkeyup="applyTagFilters()" />
+                <select id="tag-category-filter" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 6px;border-radius:4px;font-size:11px;outline:none" onchange="applyTagFilters()">
+                  <option value="">All Categories</option>
+                  <option value="Offense">Offense</option>
+                  <option value="Defense">Defense</option>
+                  <option value="Transition">Transition</option>
+                  <option value="Set Play">Set Play</option>
+                  <option value="Foul">Foul</option>
+                  <option value="Timeout">Timeout</option>
+                  <option value="Free Throw">Free Throw</option>
+                </select>
+                <select id="tag-player-filter" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 6px;border-radius:4px;font-size:11px;outline:none" onchange="applyTagFilters()">
+                  <option value="">All Players</option>
+                </select>
               </div>
               <div id="tags-list">
                 <!-- populated by JS -->
@@ -342,6 +388,18 @@
         <div id="scouting-content"></div>
       </div>
 
+      <!-- PLAYERS -->
+      <div id="panel-players" class="panel" style="overflow-y:auto;padding:16px;flex-direction:column;">
+        <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:18px;font-weight:700;color:var(--text)">Players</div>
+          <div style="display:flex;gap:8px">
+            <button class="topbar-btn" onclick="showImportPlayersDialog()"><i class="ti ti-upload"></i> Import CSV</button>
+            <button class="topbar-btn" onclick="showAddPlayerDialog()"><i class="ti ti-plus"></i> Add Player</button>
+          </div>
+        </div>
+        <div id="players-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+
       <!-- SHORTCUTS -->
       <div id="panel-shortcuts" class="panel" style="overflow-y:auto;padding:16px;flex-direction:column;">
         <div style="margin-bottom:20px">
@@ -351,6 +409,41 @@
         <div id="shortcuts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"></div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Assign Players to Tag Modal -->
+<div class="modal-overlay" id="assign-players-modal" style="display:none">
+  <div class="modal" style="width:500px">
+    <h2><i class="ti ti-users" style="color:var(--accent)"></i> Assign Players to Tag</h2>
+    <div style="margin-bottom:16px;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:12px">
+      <div id="players-checkbox-list" style="display:flex;flex-direction:column;gap:8px">
+        <!-- populated by JS -->
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeAssignPlayersModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveTagPlayers()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Players CSV Modal -->
+<div class="modal-overlay" id="import-players-modal" style="display:none">
+  <div class="modal">
+    <h2><i class="ti ti-upload" style="color:var(--accent)"></i> Import Players from CSV</h2>
+    <div class="form-row">
+      <label>CSV File</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="players-csv-path" placeholder="Select CSV file..." style="flex:1" readonly />
+        <button class="btn-secondary" onclick="browsePlayersCSV()" style="white-space:nowrap">Browse…</button>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px">Expected columns: name, jersey_number (optional), position (optional), team (optional)</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="hideImportPlayersModal()">Cancel</button>
+      <button class="btn-primary" onclick="doImportPlayers()">Import</button>
     </div>
   </div>
 </div>
@@ -415,6 +508,14 @@ const state = {
   playInterval: null,
   selectedPlaylist: null,
   thumbnails: {},   // videoId → jpeg data URL
+  editingTagId: null,
+  selectedPlayerIds: [],
+  tagFilters: {
+    search: '',
+    category: '',
+    player: '',
+  },
+  layoutMode: 'side-by-side', // or 'stacked'
 };
 
 // ── Category colors ────────────────────────────────────────
@@ -481,6 +582,11 @@ async function demoInvoke(cmd, args) {
   if (cmd === 'tags_for_video') return state.tags.filter(t => t.video_id === (args.videoId ?? args.video_id));
   if (cmd === 'filter_tags') return filterTagsLocal(args.filter);
   if (cmd === 'delete_tag') { state.tags = state.tags.filter(t => t.id !== args.id); return 1; }
+  if (cmd === 'update_tag_players') {
+    const tag = state.tags.find(t => t.id === (args.tagId ?? args.tag_id));
+    if (tag) tag.player_ids = args.playerIds ?? args.player_ids;
+    return tag;
+  }
   if (cmd === 'create_playlist') {
     const p = {
       id: uid(), name: args.req.name, description: args.req.description || null,
@@ -514,6 +620,18 @@ async function demoInvoke(cmd, args) {
   if (cmd === 'video_stats') return computeStats(args.videoId ?? args.video_id);
   if (cmd === 'global_stats') return computeStats('all');
   if (cmd === 'list_players') return state.players;
+  if (cmd === 'add_player') {
+    const p = {
+      id: uid(), ...args.player,
+      created_at: new Date().toISOString(),
+    };
+    state.players.push(p);
+    return p;
+  }
+  if (cmd === 'delete_player') {
+    state.players = state.players.filter(p => p.id !== args.id);
+    return 1;
+  }
   return null;
 }
 
@@ -581,6 +699,10 @@ function showPanel(name) {
   document.getElementById('topbar-context').textContent = labels[name] || name;
   if (name === 'stats') renderStats();
   if (name === 'playlists') renderPlaylists();
+  if (name === 'coding') showLayoutToggleBtn();
+  const topbarBtn = document.getElementById('layout-toggle-btn-topbar');
+  if (topbarBtn) topbarBtn.style.display = name === 'coding' ? 'flex' : 'none';
+  if (name === 'players') renderPlayers();
   if (name === 'scouting') renderScouting();
   if (name === 'shortcuts') renderShortcuts();
 }
@@ -705,6 +827,7 @@ async function selectVideo(id) {
   state.selectedVideo = state.videos.find(v => v.id === id);
   state.duration = state.selectedVideo?.duration_seconds || 600;
   state.currentTime = 0;
+  state.tagFilters = { search: '', category: '', player: '' };
   state.tags = await invoke('tags_for_video', { videoId: id });
   renderLibrary();
   showPanel('coding');
@@ -834,23 +957,103 @@ function renderTagTimeline() {
     }).join('');
 }
 
+function applyTagFilters() {
+  state.tagFilters.search = document.getElementById('tag-search-input')?.value || '';
+  state.tagFilters.category = document.getElementById('tag-category-filter')?.value || '';
+  state.tagFilters.player = document.getElementById('tag-player-filter')?.value || '';
+  renderTagsList();
+}
+
+function updatePlayerFilterOptions() {
+  const playerFilter = document.getElementById('tag-player-filter');
+  if (!playerFilter) return;
+
+  const videoTags = state.tags.filter(t => t.video_id === state.selectedVideo?.id);
+  if (videoTags.length === 0) return;
+
+  const playerIdsInTags = new Set();
+  videoTags.forEach(t => {
+    if (t.player_ids && Array.isArray(t.player_ids) && t.player_ids.length > 0) {
+      t.player_ids.forEach(pid => {
+        if (pid && typeof pid === 'string') {
+          playerIdsInTags.add(pid);
+        }
+      });
+    }
+  });
+
+  if (playerIdsInTags.size === 0) {
+    playerFilter.innerHTML = '<option value="">All Players</option>';
+    return; // No players assigned to any tags
+  }
+
+  const currentValue = playerFilter.value || '';
+  playerFilter.innerHTML = '<option value="">All Players</option>';
+
+  const playerArray = Array.from(playerIdsInTags)
+    .map(pid => ({ id: pid, player: state.players.find(p => p.id === pid) }))
+    .filter(item => item.player) // Only include if player exists
+    .sort((a, b) => (a.player.name || '').localeCompare(b.player.name || ''));
+
+  playerArray.forEach(item => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.player.name + (item.player.jersey_number ? ` #${item.player.jersey_number}` : '');
+    playerFilter.appendChild(option);
+  });
+
+  if (currentValue) playerFilter.value = currentValue;
+}
+
+function getFilteredTags() {
+  let filtered = state.tags.filter(t => t.video_id === state.selectedVideo?.id);
+
+  if (state.tagFilters.search) {
+    const q = state.tagFilters.search.toLowerCase();
+    filtered = filtered.filter(t => t.label.toLowerCase().includes(q) || t.notes?.toLowerCase().includes(q));
+  }
+
+  if (state.tagFilters.category) {
+    filtered = filtered.filter(t => t.category === state.tagFilters.category);
+  }
+
+  if (state.tagFilters.player) {
+    filtered = filtered.filter(t => {
+      if (!t.player_ids || !Array.isArray(t.player_ids)) return false;
+      return t.player_ids.includes(state.tagFilters.player);
+    });
+  }
+
+  return filtered;
+}
+
 function renderTagsList() {
   const el = document.getElementById('tags-list');
   const count = document.getElementById('tag-count-badge');
-  const videoTags = state.tags.filter(t => t.video_id === state.selectedVideo?.id);
+
+  if (!el) return;
+  updatePlayerFilterOptions();
+
+  const videoTags = getFilteredTags();
   count.textContent = videoTags.length;
+
   if (!videoTags.length) {
-    el.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No tags yet.<br>Click code buttons to tag events.</div>`;
+    const allTags = state.tags.filter(t => t.video_id === state.selectedVideo?.id);
+    const msg = allTags.length > 0 ? 'No tags match filters.' : 'No tags yet.<br>Click code buttons to tag events.';
+    el.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">${msg}</div>`;
     return;
   }
   el.innerHTML = videoTags.map(t => {
     const col = catColor(t.category);
     const dur = (t.time_out - t.time_in).toFixed(1);
-    return `<div class="tag-row" onclick="seekTo(${t.time_in})">
+    const playerCount = (t.player_ids || []).length;
+    return `<div class="tag-row" onclick="seekTo(${t.time_in})" style="position:relative">
       <div class="tag-color-dot" style="background:${col}"></div>
       <span class="tag-row-label">${t.label}</span>
+      ${playerCount > 0 ? `<span style="font-size:10px;background:rgba(59,130,246,0.2);color:var(--accent);padding:2px 6px;border-radius:3px">${playerCount} player${playerCount !== 1 ? 's' : ''}</span>` : ''}
       <span class="tag-row-time">${fmtTime(t.time_in)}</span>
       <span class="tag-row-dur">${dur}s</span>
+      <button onclick="event.stopPropagation();showAssignPlayersModal('${t.id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;padding:2px;font-size:14px;transition:color .1s" title="Assign players"><i class="ti ti-users"></i></button>
       <button onclick="event.stopPropagation();deleteTag('${t.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;font-size:14px"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
@@ -859,9 +1062,76 @@ function renderTagsList() {
 async function deleteTag(id) {
   await invoke('delete_tag', { id });
   state.tags = state.tags.filter(t => t.id !== id);
+  state.playlists.forEach(p => {
+    p.tag_ids = p.tag_ids.filter(tid => tid !== id);
+  });
   renderTagTimeline();
   renderTagsList();
+  if (state.selectedPlaylist) selectPlaylist(state.selectedPlaylist.id);
   notify('Tag deleted');
+}
+
+async function showAssignPlayersModal(tagId) {
+  const tag = state.tags.find(t => t.id === tagId);
+  if (!tag) return;
+
+  // Load players if not already loaded
+  if (!state.players || state.players.length === 0) {
+    try {
+      state.players = await invoke('list_players', {});
+    } catch (e) {
+      console.error('[showAssignPlayersModal] failed to load players:', e);
+      notify('Failed to load players', false);
+      return;
+    }
+  }
+
+  state.editingTagId = tagId;
+  state.selectedPlayerIds = [...(tag.player_ids || [])];
+
+  const list = document.getElementById('players-checkbox-list');
+  if (!list) return;
+
+  if (state.players.length === 0) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No players yet. Add some in the Players panel first.</div>';
+  } else {
+    list.innerHTML = state.players.map(p => `
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px;border-radius:4px;transition:background .1s">
+        <input type="checkbox" id="player-${p.id}" value="${p.id}" ${state.selectedPlayerIds.includes(p.id) ? 'checked' : ''} onchange="updateSelectedPlayers()" style="cursor:pointer" />
+        <span style="flex:1">${p.name}${p.jersey_number ? ` #${p.jersey_number}` : ''}</span>
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('assign-players-modal').style.display = 'flex';
+}
+
+function updateSelectedPlayers() {
+  const checkboxes = document.querySelectorAll('#players-checkbox-list input[type="checkbox"]');
+  state.selectedPlayerIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+}
+
+function closeAssignPlayersModal() {
+  document.getElementById('assign-players-modal').style.display = 'none';
+  state.editingTagId = null;
+  state.selectedPlayerIds = [];
+}
+
+async function saveTagPlayers() {
+  if (!state.editingTagId) return;
+  try {
+    const tag = state.tags.find(t => t.id === state.editingTagId);
+    if (tag) {
+      tag.player_ids = state.selectedPlayerIds;
+      await invoke('update_tag_players', { tagId: state.editingTagId, playerIds: state.selectedPlayerIds });
+      renderTagTimeline();
+      renderTagsList();
+      closeAssignPlayersModal();
+      notify('Players assigned to tag');
+    }
+  } catch (e) {
+    notify(`Failed to assign players: ${e}`, false);
+  }
 }
 
 // ── Playback helpers ───────────────────────────────────────
@@ -905,7 +1175,7 @@ function updateScrub() {
         const badge = document.querySelector(`#vthumb-${entry.id} .duration-badge`);
         if (badge) badge.textContent = fmtDur(video.duration);
         // Persist to database so it shows in library for future sessions
-        invoke('updateVideoDuration', { id: state.selectedVideo.id, durationSeconds: video.duration })
+        invoke('update_video_duration', { id: state.selectedVideo.id, durationSeconds: video.duration })
           .catch(e => console.error('[loadedmetadata] duration save failed:', e));
       }
     }
@@ -927,7 +1197,7 @@ function updateScrub() {
   });
 })();
 
-document.getElementById('play-btn').addEventListener('click', () => {
+function togglePlayPause() {
   const video = document.getElementById('main-video');
   if (isTauri && video.src) {
     video.paused ? video.play() : video.pause();
@@ -950,6 +1220,16 @@ document.getElementById('play-btn').addEventListener('click', () => {
   } else {
     clearInterval(state.playInterval);
   }
+}
+
+document.getElementById('play-btn').addEventListener('click', togglePlayPause);
+
+// Spacebar to play/pause
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && document.querySelector('.panel.active')?.id === 'panel-coding' && state.selectedVideo) {
+    e.preventDefault();
+    togglePlayPause();
+  }
 });
 
 document.getElementById('scrub').addEventListener('click', (e) => {
@@ -967,15 +1247,117 @@ document.getElementById('speed-sel').addEventListener('change', (e) => {
   if (video) video.playbackRate = rate;
 });
 
+// ── Layout toggle ───────────────────────────────────────────
+function toggleLayoutMode() {
+  const layout = document.querySelector('.coding-layout');
+  const topbarBtn = document.getElementById('layout-toggle-btn-topbar');
+
+  if (!layout) return;
+
+  if (state.layoutMode === 'side-by-side') {
+    state.layoutMode = 'stacked';
+    layout.classList.add('stacked');
+    if (topbarBtn) {
+      topbarBtn.innerHTML = '<i class="ti ti-layout-sidebar-right-expand"></i>';
+      topbarBtn.title = 'Switch to side-by-side layout';
+    }
+  } else {
+    state.layoutMode = 'side-by-side';
+    layout.classList.remove('stacked');
+    if (topbarBtn) {
+      topbarBtn.innerHTML = '<i class="ti ti-layout-sidebar-right-collapse"></i>';
+      topbarBtn.title = 'Switch to stacked layout';
+    }
+  }
+}
+
+// Direct click handler for layout toggle
+setTimeout(() => {
+  const layoutBtn = document.getElementById('layout-toggle-btn-topbar');
+  if (layoutBtn) {
+    layoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleLayoutMode();
+    });
+  }
+}, 100);
+
+function showLayoutToggleBtn() {
+  const topbarBtn = document.getElementById('layout-toggle-btn-topbar');
+  if (topbarBtn && document.querySelector('.coding-layout')) {
+    topbarBtn.style.display = 'flex';
+  }
+}
+
+// ── Resize handles ──────────────────────────────────────────
+let isResizing = false;
+let resizingType = null; // 'code-panel' or 'tags-section'
+let startX = 0;
+let startY = 0;
+let startWidth = 0;
+let startHeight = 0;
+
+document.getElementById('code-panel-resize-handle')?.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  resizingType = 'code-panel';
+  startX = e.clientX;
+  startY = e.clientY;
+  const codePanel = document.getElementById('code-panel');
+  startWidth = codePanel.offsetWidth;
+  startHeight = codePanel.offsetHeight;
+  document.body.style.cursor = state.layoutMode === 'stacked' ? 'row-resize' : 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+
+const tagsResizeHandle = document.getElementById('tags-resize-handle');
+if (tagsResizeHandle) {
+  tagsResizeHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isResizing = true;
+    resizingType = 'tags-section';
+    startY = e.clientY;
+    const tagsSection = document.querySelector('.tags-section');
+    const codeSection = document.querySelector('.code-section');
+    if (!tagsSection || !codeSection) return;
+    startHeight = tagsSection.offsetHeight;
+    codeSection.style.flex = '0 0 auto';
+    codeSection.style.height = codeSection.offsetHeight + 'px';
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  });
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing || resizingType !== 'tags-section') return;
+
+  const tagsSection = document.querySelector('.tags-section');
+  if (!tagsSection) return;
+
+  const diff = e.clientY - startY;
+  const newHeight = Math.max(100, startHeight - diff);
+  tagsSection.style.height = newHeight + 'px';
+  tagsSection.style.flex = '0 0 auto';
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing && resizingType === 'tags-section') {
+    isResizing = false;
+    resizingType = null;
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+  }
+});
+
 // ── Playlists ──────────────────────────────────────────────
 function renderPlaylists() {
   const list = document.getElementById('playlist-list');
   const extra = state.playlists.length ? '' : '';
   const items = state.playlists.map(p => {
     const isSelected = state.selectedPlaylist?.id === p.id;
+    const clipCount = state.tags.filter(t => p.tag_ids.includes(t.id)).length;
     return `<div class="playlist-item ${isSelected ? 'selected' : ''}" onclick="selectPlaylist('${p.id}')">
       <h3>${p.name}</h3>
-      <div class="meta"><span>${p.tag_ids.length} clips</span>${p.description ? `<span>· ${p.description}</span>` : ''}</div>
+      <div class="meta"><span>${clipCount} clips</span>${p.description ? `<span>· ${p.description}</span>` : ''}</div>
     </div>`;
   }).join('');
   list.innerHTML = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
@@ -987,25 +1369,96 @@ function renderPlaylists() {
 
 function selectPlaylist(id) {
   state.selectedPlaylist = state.playlists.find(p => p.id === id);
+  state.tagFilters = { search: '', category: '', player: '' };
   renderPlaylists();
+  renderPlaylistClips();
+}
+
+function renderPlaylistClips() {
   const panel = document.getElementById('playlist-clips');
-  if (!state.selectedPlaylist) return;
-  const tags = state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id));
-  panel.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <div style="flex:1">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <div style="font-size:16px;font-weight:700;color:var(--text)" id="playlist-name-display">${state.selectedPlaylist.name}</div>
-        <button onclick="enterPlaylistEditMode()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0;display:flex;align-items:center;justify-content:center" title="Edit name"><i class="ti ti-pencil"></i></button>
+  if (!state.selectedPlaylist || !panel) return;
+
+  const clipsContent = document.getElementById('playlist-clips-content');
+
+  if (!clipsContent) {
+    initializePlaylistClipsPanel();
+    setTimeout(() => {
+      const allTags = state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id));
+      updatePlaylistPlayerFilter(allTags);
+      renderPlaylistClipsContent(allTags);
+    }, 0);
+    return;
+  }
+
+  const allTags = state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id));
+  updatePlaylistPlayerFilter(allTags);
+  renderPlaylistClipsContent(allTags);
+}
+
+function initializePlaylistClipsPanel() {
+  const panel = document.getElementById('playlist-clips');
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="font-size:16px;font-weight:700;color:var(--text)" id="playlist-name-display">${state.selectedPlaylist.name}</div>
+          <button onclick="enterPlaylistEditMode()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0;display:flex;align-items:center;justify-content:center" title="Edit name"><i class="ti ti-pencil"></i></button>
+        </div>
+        <div style="font-size:12px;color:var(--text2)" id="playlist-clip-count">0 clips</div>
       </div>
-      <div style="font-size:12px;color:var(--text2)">${tags.length} clips</div>
+      <div style="display:flex;gap:8px">
+        <button class="topbar-btn" onclick="showAddClipsDialog('${state.selectedPlaylist.id}')"><i class="ti ti-plus"></i> Add Clips</button>
+        <button class="topbar-btn" onclick="sharePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-share"></i> Share</button>
+        <button class="topbar-btn" onclick="deletePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-trash"></i> Delete</button>
+      </div>
     </div>
-    <div style="display:flex;gap:8px">
-      <button class="topbar-btn" onclick="showAddClipsDialog('${state.selectedPlaylist.id}')"><i class="ti ti-plus"></i> Add Clips</button>
-      <button class="topbar-btn" onclick="sharePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-share"></i> Share</button>
-      <button class="topbar-btn" onclick="deletePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-trash"></i> Delete</button>
+    <div style="padding:8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px">
+      <input type="text" id="playlist-search-input" placeholder="Search clips..." style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-size:11px;outline:none" onkeyup="applyPlaylistFilters()" />
+      <select id="playlist-category-filter" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 6px;border-radius:4px;font-size:11px;outline:none" onchange="applyPlaylistFilters()">
+        <option value="">All Categories</option>
+        <option value="Offense">Offense</option>
+        <option value="Defense">Defense</option>
+        <option value="Transition">Transition</option>
+        <option value="Set Play">Set Play</option>
+        <option value="Foul">Foul</option>
+        <option value="Timeout">Timeout</option>
+        <option value="Free Throw">Free Throw</option>
+      </select>
+      <select id="playlist-player-filter" style="background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:5px 6px;border-radius:4px;font-size:11px;outline:none" onchange="applyPlaylistFilters()">
+        <option value="">All Players</option>
+      </select>
     </div>
-  </div>
-  ${tags.length ? tags.map((t, i) => {
+    <div id="playlist-clips-content" style="overflow-y:auto;flex:1"></div>
+  `;
+  renderPlaylistClipsContent(state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id)));
+}
+
+function renderPlaylistClipsContent(allTags) {
+  const allTagsSet = new Set(state.selectedPlaylist.tag_ids);
+  const allPlaylistTags = state.tags.filter(t => allTagsSet.has(t.id));
+
+  let filteredTags = allPlaylistTags;
+  if (state.tagFilters.search) {
+    const q = state.tagFilters.search.toLowerCase();
+    filteredTags = filteredTags.filter(t => t.label.toLowerCase().includes(q) || t.notes?.toLowerCase().includes(q));
+  }
+  if (state.tagFilters.category) {
+    filteredTags = filteredTags.filter(t => t.category === state.tagFilters.category);
+  }
+  if (state.tagFilters.player) {
+    filteredTags = filteredTags.filter(t => {
+      if (!t.player_ids || !Array.isArray(t.player_ids)) return false;
+      return t.player_ids.includes(state.tagFilters.player);
+    });
+  }
+
+  const clipCount = document.getElementById('playlist-clip-count');
+  if (clipCount) clipCount.textContent = `${filteredTags.length} / ${allPlaylistTags.length} clips`;
+
+  const content = document.getElementById('playlist-clips-content');
+  if (!content) return;
+
+  content.innerHTML = filteredTags.length ? filteredTags.map(t => {
     const col = catColor(t.category);
     const dur = (t.time_out - t.time_in).toFixed(1);
     return `<div class="clip-card" style="position:relative" onclick="playClip('${t.id}')">
@@ -1021,7 +1474,51 @@ function selectPlaylist(id) {
         <i class="ti ti-x"></i>
       </button>
     </div>`;
-  }).join('') : '<div style="text-align:center;color:var(--text3);padding:32px">No clips in this playlist.</div>'}`;
+  }).join('') : `<div style="text-align:center;color:var(--text3);padding:32px">${allPlaylistTags.length ? 'No clips match filters.' : 'No clips in this playlist.'}</div>`;
+}
+
+function applyPlaylistFilters() {
+  state.tagFilters.search = document.getElementById('playlist-search-input')?.value?.trim() || '';
+  state.tagFilters.category = document.getElementById('playlist-category-filter')?.value?.trim() || '';
+  state.tagFilters.player = document.getElementById('playlist-player-filter')?.value?.trim() || '';
+  renderPlaylistClipsContent(state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id)));
+}
+
+function updatePlaylistPlayerFilter(tags) {
+  const playerFilter = document.getElementById('playlist-player-filter');
+  if (!playerFilter || !tags || tags.length === 0) return;
+
+  const playerIdsInTags = new Set();
+  tags.forEach(t => {
+    if (t.player_ids && Array.isArray(t.player_ids) && t.player_ids.length > 0) {
+      t.player_ids.forEach(pid => {
+        if (pid && typeof pid === 'string') {
+          playerIdsInTags.add(pid);
+        }
+      });
+    }
+  });
+
+  const currentValue = playerFilter.value || '';
+  playerFilter.innerHTML = '<option value="">All Players</option>';
+
+  if (playerIdsInTags.size === 0) {
+    return; // No players assigned to any tags
+  }
+
+  const playerArray = Array.from(playerIdsInTags)
+    .map(pid => ({ id: pid, player: state.players.find(p => p.id === pid) }))
+    .filter(item => item.player) // Only include if player exists
+    .sort((a, b) => (a.player.name || '').localeCompare(b.player.name || ''));
+
+  playerArray.forEach(item => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.player.name + (item.player.jersey_number ? ` #${item.player.jersey_number}` : '');
+    playerFilter.appendChild(option);
+  });
+
+  if (currentValue) playerFilter.value = currentValue;
 }
 
 async function createPlaylistFromFilter() {
@@ -1399,6 +1896,156 @@ async function doImport() {
   } catch (e) {
     notify(`Import failed: ${e}`, false);
   }
+}
+
+// ── Players ────────────────────────────────────────────────
+async function renderPlayers() {
+  try {
+    state.players = await invoke('list_players', {});
+  } catch (e) {
+    console.error('[renderPlayers] error:', e);
+  }
+  const list = document.getElementById('players-list');
+  if (!state.players.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:32px;text-align:center"><i class="ti ti-users"></i><h3>No players yet</h3><p>Add your roster to assign players to clips.</p></div>';
+    return;
+  }
+  list.innerHTML = state.players.map(p => {
+    const meta = [p.jersey_number && `#${p.jersey_number}`, p.position, p.team].filter(Boolean).join(' · ');
+    return `<div class="player-card">
+      <div class="player-info">
+        <h4>${p.name}</h4>
+        ${meta ? `<div class="meta">${meta}</div>` : ''}
+      </div>
+      <button class="player-delete" onclick="deletePlayer('${p.id}')" title="Delete player"><i class="ti ti-trash"></i></button>
+    </div>`;
+  }).join('');
+}
+
+function showAddPlayerDialog() {
+  const name = prompt('Player name:');
+  if (!name) return;
+  const jerseyStr = prompt('Jersey number (optional):');
+  const jersey = jerseyStr ? parseInt(jerseyStr) : null;
+  addPlayer(name, jersey);
+}
+
+async function addPlayer(name, jerseyNumber = null) {
+  try {
+    const player = {
+      id: uid(),
+      name,
+      jersey_number: jerseyNumber,
+      position: null,
+      team: null,
+      notes: null,
+      photo_path: null,
+      created_at: new Date().toISOString()
+    };
+    const p = await invoke('add_player', { player });
+    state.players.push(p);
+    renderPlayers();
+    notify(`Player "${name}" added`);
+  } catch (e) {
+    notify(`Failed to add player: ${e}`, false);
+  }
+}
+
+async function deletePlayer(id) {
+  try {
+    await invoke('delete_player', { id });
+    state.players = state.players.filter(p => p.id !== id);
+    renderPlayers();
+    notify('Player deleted');
+  } catch (e) {
+    notify(`Failed to delete player: ${e}`, false);
+  }
+}
+
+function showImportPlayersDialog() {
+  document.getElementById('import-players-modal').style.display = 'flex';
+}
+
+function hideImportPlayersModal() {
+  document.getElementById('import-players-modal').style.display = 'none';
+  document.getElementById('players-csv-path').value = '';
+}
+
+async function browsePlayersCSV() {
+  if (!isTauri) {
+    notify('File browse only works in Tauri', false);
+    return;
+  }
+  try {
+    const file = await window.__TAURI__.dialog.open({
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+      multiple: false,
+      directory: false,
+    });
+    if (file) {
+      document.getElementById('players-csv-path').value = file;
+    }
+  } catch (e) {
+    notify(`Browse failed: ${e}`, false);
+  }
+}
+
+async function doImportPlayers() {
+  const path = document.getElementById('players-csv-path').value;
+  if (!path) {
+    notify('Please select a CSV file', false);
+    return;
+  }
+  try {
+    if (!isTauri) {
+      notify('CSV import only works in Tauri', false);
+      return;
+    }
+    const content = await window.__TAURI__.fs.readTextFile(path);
+    const players = parsePlayersCSV(content);
+    if (!players.length) {
+      notify('No valid players found in CSV', false);
+      return;
+    }
+    for (const player of players) {
+      await addPlayer(player.name, player.jersey_number);
+    }
+    hideImportPlayersModal();
+    notify(`Imported ${players.length} players`);
+  } catch (e) {
+    notify(`Import failed: ${e}`, false);
+  }
+}
+
+function parsePlayersCSV(content) {
+  const lines = content.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 1) return [];
+
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const nameIdx = header.indexOf('name');
+  const jerseyIdx = header.indexOf('jersey_number');
+  const posIdx = header.indexOf('position');
+  const teamIdx = header.indexOf('team');
+
+  if (nameIdx === -1) {
+    console.warn('[parsePlayersCSV] no "name" column found');
+    return [];
+  }
+
+  const players = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(p => p.trim());
+    const name = parts[nameIdx];
+    if (!name) continue;
+
+    players.push({
+      name,
+      jersey_number: jerseyIdx >= 0 && parts[jerseyIdx] ? parseInt(parts[jerseyIdx]) : null,
+      position: posIdx >= 0 ? parts[posIdx] || null : null,
+      team: teamIdx >= 0 ? parts[teamIdx] || null : null,
+    });
+  }
+  return players;
 }
 
 // ── Notifications ──────────────────────────────────────────

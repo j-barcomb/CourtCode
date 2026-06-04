@@ -169,7 +169,7 @@ impl Database {
     pub fn insert_tag(&self, t: &Tag) -> Result<()> {
         let json = serde_json::to_string(t)?;
         self.conn.execute(
-            "INSERT INTO tags (id, video_id, code_button_id, label, category, time_in, time_out, quarter, notes, created_at, data_json)
+            "INSERT OR REPLACE INTO tags (id, video_id, code_button_id, label, category, time_in, time_out, quarter, notes, created_at, data_json)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
             params![
                 t.id, t.video_id, t.code_button_id, t.label,
@@ -248,5 +248,9 @@ impl Database {
             if let Ok(p) = serde_json::from_str::<Player>(&r?) { players.push(p); }
         }
         Ok(players)
+    }
+
+    pub fn delete_player(&self, id: &str) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM players WHERE id=?1", [id])?)
     }
 }

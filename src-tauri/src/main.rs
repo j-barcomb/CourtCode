@@ -55,6 +55,10 @@ fn delete_tag(state: State<DbState>, id: String) -> Result<usize, String> {
     tag_commands::delete_tag(&state, id)
 }
 #[tauri::command]
+fn update_tag_players(state: State<DbState>, tag_id: String, player_ids: Vec<String>) -> Result<Tag, String> {
+    tag_commands::update_tag_players(&state, tag_id, player_ids)
+}
+#[tauri::command]
 fn default_code_window(state: State<DbState>) -> Result<CodeWindow, String> {
     tag_commands::default_code_window(&state)
 }
@@ -107,6 +111,10 @@ fn list_players(state: State<DbState>) -> Result<Vec<Player>, String> {
     player_commands::list_players(&state)
 }
 #[tauri::command]
+fn delete_player(state: State<DbState>, id: String) -> Result<usize, String> {
+    player_commands::delete_player(&state, id)
+}
+#[tauri::command]
 fn video_stats(state: State<DbState>, video_id: String) -> Result<GameStats, String> {
     stats_commands::video_stats(&state, video_id)
 }
@@ -150,12 +158,12 @@ fn main() {
         .manage(Mutex::new(db))
         .invoke_handler(tauri::generate_handler![
             import_video, list_videos, delete_video, update_video_duration,
-            create_tag, tags_for_video, filter_tags, delete_tag,
+            create_tag, tags_for_video, filter_tags, delete_tag, update_tag_players,
             default_code_window, save_code_window, list_code_windows,
             create_playlist, list_playlists, delete_playlist,
             share_playlist, export_playlist_json,
             add_tag_to_playlist, remove_tag_from_playlist, update_playlist_name,
-            add_player, list_players,
+            add_player, list_players, delete_player,
             video_stats, global_stats,
         ])
         .run(tauri::generate_context!())

@@ -51,6 +51,16 @@ pub fn delete_tag(db: &DbState, id: String) -> Result<usize, String> {
     db.delete_tag(&id).map_err(|e| e.to_string())
 }
 
+pub fn update_tag_players(db: &DbState, tag_id: String, player_ids: Vec<String>) -> Result<Tag, String> {
+    let db = db.lock().map_err(|e| e.to_string())?;
+    let all_tags = db.all_tags().map_err(|e| e.to_string())?;
+    let mut tag = all_tags.into_iter().find(|t| t.id == tag_id)
+        .ok_or("Tag not found".to_string())?;
+    tag.player_ids = player_ids;
+    db.insert_tag(&tag).map_err(|e| e.to_string())?;
+    Ok(tag)
+}
+
 pub fn save_code_window(db: &DbState, window: CodeWindow) -> Result<CodeWindow, String> {
     let db = db.lock().map_err(|e| e.to_string())?;
     db.insert_code_window(&window).map_err(|e| e.to_string())?;

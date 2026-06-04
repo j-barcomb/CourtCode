@@ -11,3 +11,8 @@ pub fn list_players(db: &DbState) -> Result<Vec<Player>, String> {
     let db = db.lock().map_err(|e| e.to_string())?;
     db.list_players().map_err(|e| e.to_string())
 }
+
+pub fn delete_player(db: &DbState, id: String) -> Result<usize, String> {
+    let db = db.lock().map_err(|e| e.to_string())?;
+    db.delete_player(&id).map_err(|e| e.to_string())
+}
