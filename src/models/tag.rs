@@ -159,24 +159,29 @@ impl CodeWindow {
     pub fn basketball_default() -> Self {
         let mut window = Self::new("Basketball Default".to_string());
         window.description = Some("Standard basketball coding template".to_string());
-        window.buttons = vec![
-            CodeButton::new("Pick & Roll".to_string(),        TagCategory::Offense,    "#2563EB".to_string()),
-            CodeButton::new("Post-Up".to_string(),            TagCategory::Offense,    "#1D4ED8".to_string()),
-            CodeButton::new("Isolation".to_string(),          TagCategory::Offense,    "#1E40AF".to_string()),
-            CodeButton::new("Spot Up".to_string(),            TagCategory::Offense,    "#1E3A8A".to_string()),
-            CodeButton::new("Transition Offense".to_string(), TagCategory::Transition, "#D97706".to_string()),
-            CodeButton::new("Man Defense".to_string(),        TagCategory::Defense,    "#DC2626".to_string()),
-            CodeButton::new("Zone Defense".to_string(),       TagCategory::Defense,    "#B91C1C".to_string()),
-            CodeButton::new("Press".to_string(),              TagCategory::Defense,    "#991B1B".to_string()),
-            CodeButton::new("Transition Defense".to_string(), TagCategory::Transition, "#B45309".to_string()),
-            CodeButton::new("Set Play".to_string(),           TagCategory::SetPlay,    "#7C3AED".to_string()),
-            CodeButton::new("BLOB".to_string(),               TagCategory::SetPlay,    "#6D28D9".to_string()),
-            CodeButton::new("SLOB".to_string(),               TagCategory::SetPlay,    "#5B21B6".to_string()),
-            CodeButton::new("Offensive Foul".to_string(),     TagCategory::Foul,       "#DB2777".to_string()),
-            CodeButton::new("Defensive Foul".to_string(),     TagCategory::Foul,       "#BE185D".to_string()),
-            CodeButton::new("Timeout".to_string(),            TagCategory::Timeout,    "#0891B2".to_string()),
-            CodeButton::new("Free Throw".to_string(),         TagCategory::FreeThrow,  "#65A30D".to_string()),
+        let defaults = vec![
+            ("Pick & Roll",        TagCategory::Offense,    "#2563EB", Some("1")),
+            ("Post-Up",            TagCategory::Offense,    "#1D4ED8", Some("2")),
+            ("Isolation",          TagCategory::Offense,    "#1E40AF", Some("3")),
+            ("Spot Up",            TagCategory::Offense,    "#1E3A8A", Some("4")),
+            ("Transition Offense", TagCategory::Transition, "#D97706", Some("5")),
+            ("Man Defense",        TagCategory::Defense,    "#DC2626", Some("6")),
+            ("Zone Defense",       TagCategory::Defense,    "#B91C1C", Some("7")),
+            ("Press",              TagCategory::Defense,    "#991B1B", Some("8")),
+            ("Transition Defense", TagCategory::Transition, "#B45309", Some("9")),
+            ("Set Play",           TagCategory::SetPlay,    "#7C3AED", Some("0")),
+            ("BLOB",               TagCategory::SetPlay,    "#6D28D9", Some("a")),
+            ("SLOB",               TagCategory::SetPlay,    "#5B21B6", Some("b")),
+            ("Offensive Foul",     TagCategory::Foul,       "#DB2777", Some("c")),
+            ("Defensive Foul",     TagCategory::Foul,       "#BE185D", Some("d")),
+            ("Timeout",            TagCategory::Timeout,    "#0891B2", Some("e")),
+            ("Free Throw",         TagCategory::FreeThrow,  "#65A30D", Some("f")),
         ];
+        window.buttons = defaults.into_iter().map(|(label, cat, color, key)| {
+            let mut btn = CodeButton::new(label.to_string(), cat, color.to_string());
+            btn.shortcut_key = key.map(|s| s.to_string());
+            btn
+        }).collect();
         window
     }
 }

@@ -67,6 +67,9 @@
   .video-thumb { width: 100%; aspect-ratio: 16/9; background: var(--bg3); position: relative; display: flex; align-items: center; justify-content: center; }
   .video-thumb i { font-size: 32px; color: var(--text3); }
   .video-thumb .duration-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .video-card-delete { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; background: rgba(239, 68, 68, 0.9); border: none; color: #fff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0; transition: opacity .15s; z-index: 10; }
+  .video-thumb:hover .video-card-delete { opacity: 1; }
+  .video-card-delete:hover { background: rgba(239, 68, 68, 1); }
   .video-thumb .teams { position: absolute; bottom: 6px; left: 6px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; }
   .video-info { padding: 10px 12px; }
   .video-info h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -219,7 +222,7 @@
     <div class="nav-divider"></div>
     <button class="nav-btn" data-panel="players" title="Players"><i class="ti ti-users"></i></button>
     <div style="flex:1"></div>
-    <button class="nav-btn" title="Settings"><i class="ti ti-settings"></i></button>
+    <button class="nav-btn" data-panel="shortcuts" title="Keyboard Shortcuts"><i class="ti ti-keyboard"></i></button>
   </div>
 
   <!-- Main -->
@@ -339,6 +342,15 @@
         <div id="scouting-content"></div>
       </div>
 
+      <!-- SHORTCUTS -->
+      <div id="panel-shortcuts" class="panel" style="overflow-y:auto;padding:16px;flex-direction:column;">
+        <div style="margin-bottom:20px">
+          <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Keyboard Shortcuts</div>
+          <div style="font-size:12px;color:var(--text2)">Click a button and press a key to assign a shortcut</div>
+        </div>
+        <div id="shortcuts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -446,6 +458,15 @@ async function demoInvoke(cmd, args) {
     state.videos.push(v);
     return v;
   }
+  if (cmd === 'updateVideoDuration') {
+    const v = state.videos.find(vid => vid.id === args.id);
+    if (v) v.duration_seconds = args.durationSeconds;
+    return null;
+  }
+  if (cmd === 'deleteVideo') {
+    state.videos = state.videos.filter(v => v.id !== args.id);
+    return 1;
+  }
   if (cmd === 'list_code_windows') return state.codeWindow ? [state.codeWindow] : [];
   if (cmd === 'save_code_window') { state.codeWindow = args.window; return args.window; }
   if (cmd === 'create_tag') {
@@ -472,6 +493,24 @@ async function demoInvoke(cmd, args) {
   if (cmd === 'list_playlists') return state.playlists;
   if (cmd === 'delete_playlist') { state.playlists = state.playlists.filter(p => p.id !== args.id); return 1; }
   if (cmd === 'share_playlist') return `courtcode://share/${args.id}/${uid()}`;
+  if (cmd === 'add_tag_to_playlist') {
+    const p = state.playlists.find(pl => pl.id === args.playlistId);
+    if (p && !p.tag_ids.includes(args.tagId)) p.tag_ids.push(args.tagId);
+    return p;
+  }
+  if (cmd === 'remove_tag_from_playlist') {
+    const p = state.playlists.find(pl => pl.id === args.playlistId);
+    if (p) p.tag_ids = p.tag_ids.filter(id => id !== args.tagId);
+    return p;
+  }
+  if (cmd === 'update_playlist_name') {
+    const p = state.playlists.find(pl => pl.id === args.playlistId);
+    if (p) {
+      p.name = args.name;
+      p.updated_at = new Date().toISOString();
+    }
+    return p;
+  }
   if (cmd === 'video_stats') return computeStats(args.videoId ?? args.video_id);
   if (cmd === 'global_stats') return computeStats('all');
   if (cmd === 'list_players') return state.players;
@@ -538,11 +577,12 @@ function showPanel(name) {
   if (panel) panel.classList.add('active');
   const btn = document.querySelector(`.nav-btn[data-panel="${name}"]`);
   if (btn) btn.classList.add('active');
-  const labels = { library: 'Video Library', coding: 'Coding & Tagging', playlists: 'Playlists', stats: 'Statistics', scouting: 'Scouting Report', players: 'Players' };
+  const labels = { library: 'Video Library', coding: 'Coding & Tagging', playlists: 'Playlists', stats: 'Statistics', scouting: 'Scouting Report', players: 'Players', shortcuts: 'Keyboard Shortcuts' };
   document.getElementById('topbar-context').textContent = labels[name] || name;
   if (name === 'stats') renderStats();
   if (name === 'playlists') renderPlaylists();
   if (name === 'scouting') renderScouting();
+  if (name === 'shortcuts') renderShortcuts();
 }
 
 document.querySelectorAll('.nav-btn[data-panel]').forEach(btn => {
@@ -631,6 +671,7 @@ function renderLibrary() {
         ${thumb ? '' : '<i class="ti ti-video"></i>'}
         ${teams ? `<span class="teams">${teams}</span>` : ''}
         <span class="duration-badge">${dur}</span>
+        <button class="video-card-delete" onclick="event.stopPropagation();deleteVideo('${v.id}')" title="Delete video"><i class="ti ti-trash"></i></button>
       </div>
       <div class="video-info">
         <h3 title="${v.title}">${v.title}</h3>
@@ -670,6 +711,35 @@ async function selectVideo(id) {
   renderCodingView();
   renderTagTimeline();
   renderTagsList();
+}
+
+async function playClip(tagId) {
+  const clip = state.tags.find(t => t.id === tagId);
+  if (!clip) return;
+  await selectVideo(clip.video_id);
+  const video = document.getElementById('main-video');
+  const seekToClip = () => {
+    video.currentTime = clip.time_in;
+    video.removeEventListener('loadedmetadata', seekToClip);
+  };
+  video.addEventListener('loadedmetadata', seekToClip);
+}
+
+async function deleteVideo(id) {
+  try {
+    await invoke('delete_video', { id });
+    state.videos = state.videos.filter(v => v.id !== id);
+    state.tags = state.tags.filter(t => t.video_id !== id);
+    if (state.selectedVideo?.id === id) {
+      state.selectedVideo = null;
+      showPanel('library');
+    }
+    renderLibrary();
+    notify(`Video deleted`, true);
+  } catch (e) {
+    console.error('[deleteVideo] error:', e);
+    notify(`Delete failed: ${e}`, false);
+  }
 }
 
 function fmtDur(secs) {
@@ -812,7 +882,11 @@ function updateScrub() {
   const disp = document.getElementById('time-display');
   if (fill) fill.style.width = pct + '%';
   if (head) head.style.left = pct + '%';
-  if (disp) disp.textContent = `${fmtTime(state.currentTime)} / ${fmtTime(state.duration)}`;
+  if (disp) {
+    const text = `${fmtTime(state.currentTime)} / ${fmtTime(state.duration)}`;
+    console.log('[updateScrub] setting time display to', text, '(currentTime:', state.currentTime, 'duration:', state.duration, ')');
+    disp.textContent = text;
+  }
 }
 
 // Wire real video events once at startup
@@ -820,18 +894,23 @@ function updateScrub() {
   const video = document.getElementById('main-video');
   const icon  = document.getElementById('play-icon');
   video.addEventListener('loadedmetadata', () => {
+    console.log('[loadedmetadata] video.duration =', video.duration, 'isFinite?', isFinite(video.duration));
     state.duration = video.duration;
+    console.log('[loadedmetadata] state.duration set to', state.duration);
     if (state.selectedVideo) {
       state.selectedVideo.duration_seconds = video.duration;
       const entry = state.videos.find(v => v.id === state.selectedVideo.id);
       if (entry) {
         entry.duration_seconds = video.duration;
-        // Patch just the duration badge — avoid full renderLibrary() which triggers async thumbnail work
         const badge = document.querySelector(`#vthumb-${entry.id} .duration-badge`);
         if (badge) badge.textContent = fmtDur(video.duration);
+        // Persist to database so it shows in library for future sessions
+        invoke('updateVideoDuration', { id: state.selectedVideo.id, durationSeconds: video.duration })
+          .catch(e => console.error('[loadedmetadata] duration save failed:', e));
       }
     }
     updateScrub();
+    console.log('[loadedmetadata] after updateScrub, state.duration =', state.duration);
   });
   video.addEventListener('timeupdate', () => {
     state.currentTime = video.currentTime;
@@ -913,11 +992,15 @@ function selectPlaylist(id) {
   if (!state.selectedPlaylist) return;
   const tags = state.tags.filter(t => state.selectedPlaylist.tag_ids.includes(t.id));
   panel.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <div>
-      <div style="font-size:16px;font-weight:700;color:var(--text)">${state.selectedPlaylist.name}</div>
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="font-size:16px;font-weight:700;color:var(--text)" id="playlist-name-display">${state.selectedPlaylist.name}</div>
+        <button onclick="enterPlaylistEditMode()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0;display:flex;align-items:center;justify-content:center" title="Edit name"><i class="ti ti-pencil"></i></button>
+      </div>
       <div style="font-size:12px;color:var(--text2)">${tags.length} clips</div>
     </div>
     <div style="display:flex;gap:8px">
+      <button class="topbar-btn" onclick="showAddClipsDialog('${state.selectedPlaylist.id}')"><i class="ti ti-plus"></i> Add Clips</button>
       <button class="topbar-btn" onclick="sharePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-share"></i> Share</button>
       <button class="topbar-btn" onclick="deletePlaylist('${state.selectedPlaylist.id}')"><i class="ti ti-trash"></i> Delete</button>
     </div>
@@ -925,13 +1008,18 @@ function selectPlaylist(id) {
   ${tags.length ? tags.map((t, i) => {
     const col = catColor(t.category);
     const dur = (t.time_out - t.time_in).toFixed(1);
-    return `<div class="clip-card">
+    return `<div class="clip-card" style="position:relative" onclick="playClip('${t.id}')">
       <div class="clip-thumb"><i class="ti ti-player-play"></i></div>
       <div class="clip-info">
         <h4>${t.label}</h4>
         <div class="meta">${fmtTime(t.time_in)} → ${fmtTime(t.time_out)} · Q${t.quarter || '?'} · ${dur}s</div>
       </div>
       <span class="clip-badge" style="background:${col}22;color:${col}">${t.category}</span>
+      <button onclick="event.stopPropagation();removeClipFromPlaylist('${state.selectedPlaylist.id}','${t.id}')"
+        style="position:absolute;top:8px;right:8px;width:24px;height:24px;background:rgba(239,68,68,0.9);border:none;color:#fff;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px"
+        title="Remove from playlist">
+        <i class="ti ti-x"></i>
+      </button>
     </div>`;
   }).join('') : '<div style="text-align:center;color:var(--text3);padding:32px">No clips in this playlist.</div>'}`;
 }
@@ -960,6 +1048,130 @@ async function sharePlaylist(id) {
   const link = await invoke('share_playlist', { id });
   navigator.clipboard?.writeText(link).catch(() => {});
   notify('Share link copied: ' + link.slice(0, 50) + '...');
+}
+
+function enterPlaylistEditMode() {
+  if (!state.selectedPlaylist) return;
+  const display = document.getElementById('playlist-name-display');
+  if (!display) return;
+  const currentName = state.selectedPlaylist.name;
+  display.innerHTML = `<input type="text" id="playlist-name-input" value="${currentName}" style="background:var(--surface);border:1px solid var(--accent);color:var(--text);padding:4px 8px;border-radius:4px;font-size:14px;font-weight:700;width:100%;max-width:300px" />`;
+  const input = document.getElementById('playlist-name-input');
+  input?.focus();
+  input?.select();
+  const save = () => {
+    const newName = input?.value.trim();
+    if (newName && newName !== currentName) {
+      savePlaylistName(state.selectedPlaylist.id, newName);
+    } else {
+      display.textContent = currentName;
+    }
+  };
+  input?.addEventListener('blur', save);
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') save();
+    if (e.key === 'Escape') { display.textContent = currentName; }
+  });
+}
+
+async function savePlaylistName(playlistId, newName) {
+  try {
+    const updated = await invoke('update_playlist_name', { playlistId, name: newName });
+    const playlist = state.playlists.find(p => p.id === playlistId);
+    if (playlist) playlist.name = updated.name;
+    selectPlaylist(playlistId);
+    notify(`Playlist renamed to "${newName}"`);
+  } catch (e) {
+    notify(`Failed to rename: ${e}`, false);
+  }
+}
+
+async function removeClipFromPlaylist(playlistId, tagId) {
+  try {
+    const p = await invoke('remove_tag_from_playlist', { playlistId, tagId });
+    const playlist = state.playlists.find(pl => pl.id === playlistId);
+    if (playlist) playlist.tag_ids = p.tag_ids;
+    if (state.selectedPlaylist?.id === playlistId) {
+      selectPlaylist(playlistId);
+    }
+    notify('Clip removed', true);
+  } catch (e) {
+    console.error('Remove clip error:', e);
+    notify(`Remove failed: ${e}`, false);
+  }
+}
+
+function showAddClipsDialog(playlistId) {
+  const availableTags = state.tags.filter(t => !state.selectedPlaylist.tag_ids.includes(t.id));
+  if (!availableTags.length) { notify('All tags are already in this playlist', false); return; }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.zIndex = '200';
+
+  const html = `<div style="display:grid;grid-template-columns:1fr;gap:8px;max-height:400px;overflow-y:auto">
+    ${availableTags.map(t => {
+      const col = catColor(t.category);
+      const dur = (t.time_out - t.time_in).toFixed(1);
+      const video = state.videos.find(v => v.id === t.video_id);
+      return `<div class="add-clip-item" data-tag-id="${t.id}" data-playlist-id="${playlistId}" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;cursor:pointer;transition:all .15s">
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">${t.label}</div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${video?.title || 'Unknown video'}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtTime(t.time_in)} → ${fmtTime(t.time_out)} · ${dur}s</div>
+          </div>
+          <span style="background:${col}22;color:${col};font-size:10px;font-weight:600;padding:3px 6px;border-radius:3px;white-space:nowrap">${t.category}</span>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  modal.innerHTML = `<div class="modal">
+    <h2><i class="ti ti-plus" style="color:var(--accent)"></i> Add Clips to Playlist</h2>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Select clips to add (${availableTags.length} available)</div>
+    ${html}
+    <div style="margin-top:16px">
+      <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()" style="float:right">Close</button>
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+
+  // Use event delegation for clip items
+  modal.addEventListener('mouseover', (e) => {
+    const item = e.target.closest('.add-clip-item');
+    if (item) item.style.borderColor = 'var(--accent)';
+  });
+  modal.addEventListener('mouseout', (e) => {
+    const item = e.target.closest('.add-clip-item');
+    if (item) item.style.borderColor = 'var(--border)';
+  });
+  modal.addEventListener('click', (e) => {
+    const item = e.target.closest('.add-clip-item');
+    if (item) {
+      const tagId = item.dataset.tagId;
+      const playlistId = item.dataset.playlistId;
+      modal.remove();
+      addClipToPlaylist(playlistId, tagId);
+    }
+    if (e.target === modal) modal.remove();
+  });
+}
+
+async function addClipToPlaylist(playlistId, tagId) {
+  try {
+    const p = await invoke('add_tag_to_playlist', { playlistId, tagId });
+    const playlist = state.playlists.find(pl => pl.id === playlistId);
+    if (playlist) playlist.tag_ids = p.tag_ids;
+    if (state.selectedPlaylist?.id === playlistId) {
+      selectPlaylist(playlistId);
+    }
+    notify('Clip added', true);
+  } catch (e) {
+    console.error('Add clip error:', e);
+    notify(`Add failed: ${e}`, false);
+  }
 }
 
 // ── Stats ──────────────────────────────────────────────────
@@ -1074,6 +1286,66 @@ async function renderScouting() {
     </div>
   `;
 }
+
+// ── Shortcuts ───────────────────────────────────────────────
+function renderShortcuts() {
+  if (!state.codeWindow) return;
+  const grid = document.getElementById('shortcuts-grid');
+  let bindingId = null;
+  grid.innerHTML = state.codeWindow.buttons.map((btn, idx) => {
+    const key = btn.shortcut_key || '(none)';
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;"
+      id="shortcut-btn-${idx}"
+      onclick="startBindingShortcut(${idx})"
+      onmouseover="this.style.borderColor='var(--accent)'"
+      onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">${btn.label}</div>
+      <div style="font-size:13px;color:var(--accent);font-weight:700">${key}</div>
+    </div>`;
+  }).join('');
+}
+
+window.bindingShortcutIndex = null;
+function startBindingShortcut(idx) {
+  if (window.bindingShortcutIndex === idx) return;
+  const el = document.getElementById(`shortcut-btn-${idx}`);
+  if (!el) return;
+  window.bindingShortcutIndex = idx;
+  el.style.background = 'var(--accent)';
+  el.style.color = '#fff';
+  el.textContent = 'Press a key...';
+  el.style.textAlign = 'center';
+  el.style.padding = '20px';
+  el.style.fontSize = '14px';
+  el.style.cursor = 'default';
+}
+
+document.addEventListener('keydown', e => {
+  if (window.bindingShortcutIndex === null) return;
+  e.preventDefault();
+  const key = e.key.toLowerCase();
+  if (state.codeWindow) {
+    state.codeWindow.buttons[window.bindingShortcutIndex].shortcut_key = key;
+    invoke('save_code_window', { window: state.codeWindow }).catch(err => console.error('Save failed:', err));
+    renderShortcuts();
+    window.bindingShortcutIndex = null;
+  }
+}, { capture: true });
+
+// Trigger tags with keyboard shortcuts (only when not binding)
+document.addEventListener('keydown', e => {
+  if (window.bindingShortcutIndex !== null) return;
+  if (e.target.matches('input, textarea')) return;
+
+  const key = e.key.toLowerCase();
+  if (!state.codeWindow || !state.selectedVideo) return;
+
+  const btn = state.codeWindow.buttons.find(b => b.shortcut_key === key);
+  if (btn) {
+    e.preventDefault();
+    tagNow(btn.id, btn.label, btn.category, btn.color);
+  }
+});
 
 // ── Import Modal ───────────────────────────────────────────
 function showImportModal() {

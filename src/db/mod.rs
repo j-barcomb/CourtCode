@@ -139,6 +139,14 @@ impl Database {
         Ok(self.conn.execute("DELETE FROM videos WHERE id=?1", [id])?)
     }
 
+    pub fn update_video_duration(&self, id: &str, duration_seconds: f64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE videos SET duration_seconds=?1 WHERE id=?2",
+            params![duration_seconds, id],
+        )?;
+        Ok(())
+    }
+
     pub fn insert_code_window(&self, cw: &CodeWindow) -> Result<()> {
         let json = serde_json::to_string(cw)?;
         self.conn.execute(
@@ -199,7 +207,7 @@ impl Database {
     pub fn insert_playlist(&self, p: &Playlist) -> Result<()> {
         let json = serde_json::to_string(p)?;
         self.conn.execute(
-            "INSERT INTO playlists (id, name, description, is_shared, share_token, created_at, updated_at, data_json)
+            "INSERT OR REPLACE INTO playlists (id, name, description, is_shared, share_token, created_at, updated_at, data_json)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
             params![
                 p.id, p.name, p.description, p.is_shared as i32,

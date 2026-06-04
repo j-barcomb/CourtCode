@@ -35,6 +35,10 @@ fn delete_video(state: State<DbState>, id: String) -> Result<usize, String> {
     video_commands::delete_video(&state, id)
 }
 #[tauri::command]
+fn update_video_duration(state: State<DbState>, id: String, duration_seconds: f64) -> Result<(), String> {
+    video_commands::update_video_duration(&state, id, duration_seconds)
+}
+#[tauri::command]
 fn create_tag(state: State<DbState>, req: CreateTagRequest) -> Result<Tag, String> {
     tag_commands::create_tag(&state, req)
 }
@@ -81,6 +85,18 @@ fn share_playlist(state: State<DbState>, id: String) -> Result<String, String> {
 #[tauri::command]
 fn export_playlist_json(state: State<DbState>, req: ExportPlaylistRequest) -> Result<String, String> {
     playlist_commands::export_playlist_json(&state, req)
+}
+#[tauri::command]
+fn add_tag_to_playlist(state: State<DbState>, playlist_id: String, tag_id: String) -> Result<Playlist, String> {
+    playlist_commands::add_tag_to_playlist(&state, playlist_id, tag_id)
+}
+#[tauri::command]
+fn remove_tag_from_playlist(state: State<DbState>, playlist_id: String, tag_id: String) -> Result<Playlist, String> {
+    playlist_commands::remove_tag_from_playlist(&state, playlist_id, tag_id)
+}
+#[tauri::command]
+fn update_playlist_name(state: State<DbState>, playlist_id: String, name: String) -> Result<Playlist, String> {
+    playlist_commands::update_playlist_name(&state, playlist_id, name)
 }
 #[tauri::command]
 fn add_player(state: State<DbState>, player: Player) -> Result<Player, String> {
@@ -133,11 +149,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(db))
         .invoke_handler(tauri::generate_handler![
-            import_video, list_videos, delete_video,
+            import_video, list_videos, delete_video, update_video_duration,
             create_tag, tags_for_video, filter_tags, delete_tag,
             default_code_window, save_code_window, list_code_windows,
             create_playlist, list_playlists, delete_playlist,
             share_playlist, export_playlist_json,
+            add_tag_to_playlist, remove_tag_from_playlist, update_playlist_name,
             add_player, list_players,
             video_stats, global_stats,
         ])

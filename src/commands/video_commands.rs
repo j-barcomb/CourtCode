@@ -32,3 +32,8 @@ pub fn delete_video(db: &DbState, id: String) -> Result<usize, String> {
     let db = db.lock().map_err(|e| e.to_string())?;
     db.delete_video(&id).map_err(|e| e.to_string())
 }
+
+pub fn update_video_duration(db: &DbState, id: String, duration_seconds: f64) -> Result<(), String> {
+    let db = db.lock().map_err(|e| e.to_string())?;
+    db.update_video_duration(&id, duration_seconds).map_err(|e| e.to_string())
+}
